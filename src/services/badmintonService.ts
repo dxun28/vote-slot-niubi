@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect } from "react";
+import { supabase } from "../supabase";
 
-// Types
 export interface Player {
   id: string;
   name: string;
-  timestamp: number;
+  created_at?: string;
 }
 
 export interface AppConfig {
@@ -13,86 +13,107 @@ export interface AppConfig {
   maxSlots: number;
 }
 
-// Fallback logic for LocalStorage when Firebase is not connected
-const STORAGE_KEY_PLAYERS = 'badminton_players';
-const STORAGE_KEY_CONFIG = 'badminton_config';
-
-const getLocalPlayers = (): Player[] => {
-  const saved = localStorage.getItem(STORAGE_KEY_PLAYERS);
-  return saved ? JSON.parse(saved) : [];
-};
-
-const getLocalConfig = (): AppConfig => {
-  const saved = localStorage.getItem(STORAGE_KEY_CONFIG);
-  return saved ? JSON.parse(saved) : {
+export function useBadmintonData() {
+  const [players, setPlayers] = useState<Player[]>([]);
+  const [config, setConfig] = useState<AppConfig>({
     sessionTitle: "Buổi tập cầu lông",
     sessionTime: "08:00 - 10:00",
     maxSlots: 12
-  };
-};
+  });
 
-const saveLocalPlayers = (players: Player[]) => {
-  localStorage.setItem(STORAGE_KEY_PLAYERS, JSON.stringify(players));
-  window.dispatchEvent(new Event('storage_update'));
-};
-
-const saveLocalConfig = (config: AppConfig) => {
-  localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(config));
-  window.dispatchEvent(new Event('storage_update'));
-};
-
-// Hook for Realtime Data
-// In a real Firebase app, this would use onSnapshot.
-// For the static version without provisioning, we simulate it with LocalStorage events.
-export function useBadmintonData() {
-  const [players, setPlayers] = useState<Player[]>(getLocalPlayers());
-  const [config, setConfig] = useState<AppConfig>(getLocalConfig());
   const [loading, setLoading] = useState(true);
 
+  // FETCH DATA
+  const fetchPlayers = async () => {
+    const { data } = await supabase
+      .from("players")
+      .select("*")
+      .order("created_at", { ascending: true });
+
+    setPlayers(data || []);
+  };
+
+  const fetchConfig = async () => {
+    const { data } = await supabase
+      .from("config")
+      .select("*")
+      .single();
+
+    if (data) setConfig(data);
+  };
+
+  // INIT + REALTIME
   useEffect(() => {
-    const handleUpdate = () => {
-      setPlayers(getLocalPlayers());
-      setConfig(getLocalConfig());
+    const init = async () => {
+      await fetchPlayers();
+      await fetchConfig();
+      setLoading(false);
     };
 
-    window.addEventListener('storage_update', handleUpdate);
-    setLoading(false);
+    init();
 
-    return () => window.removeEventListener('storage_update', handleUpdate);
+    const channel = supabase
+      .channel("realtime-badminton")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "players" },
+        fetchPlayers
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "config" },
+        fetchConfig
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
-  const addPlayer = (name: string) => {
-    const current = getLocalPlayers();
-    const newPlayer: Player = {
-      id: Math.random().toString(36).substring(2, 9),
-      name,
-      timestamp: Date.now()
-    };
-    saveLocalPlayers([...current, newPlayer]);
+  // ADD PLAYER (🔥 QUAN TRỌNG)
+  const addPlayer = async (name: string) => {
+    const { error } = await supabase.from("players").insert([
+      { name }
+    ]);
+
+    if (error) console.error("ADD ERROR:", error);
   };
 
-  const removePlayer = (id: string) => {
-    const current = getLocalPlayers();
-    saveLocalPlayers(current.filter(p => p.id !== id));
+  // REMOVE
+  const removePlayer = async (id: string) => {
+    const { error } = await supabase
+      .from("players")
+      .delete()
+      .eq("id", id);
+
+    if (error) console.error(error);
   };
 
-  const resetPlayers = () => {
-    saveLocalPlayers([]);
+  // RESET
+  const resetPlayers = async () => {
+    const { error } = await supabase.from("players").delete().neq("id", "");
+
+    if (error) console.error(error);
   };
 
-  const updateConfig = (newConfig: Partial<AppConfig>) => {
-    const current = getLocalConfig();
-    saveLocalConfig({ ...current, ...newConfig });
+  // UPDATE CONFIG
+  const updateConfig = async (newConfig: Partial<AppConfig>) => {
+    const { error } = await supabase
+      .from("config")
+      .update(newConfig)
+      .eq("id", 1);
+
+    if (error) console.error(error);
   };
 
-  return { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig };
+  return {
+    players,
+    config,
+    loading,
+    addPlayer,
+    removePlayer,
+    resetPlayers,
+    updateConfig
+  };
 }
-
-/**
- * Note for Developers:
- * To enable real-time synchronization across different devices, 
- * you must accept the Firebase setup in AI Studio.
- * This will provision a Firestore database and provide an API key.
- * Once provisioned, you can replace the LocalStorage implementation 
- * below with the Firebase SDK logic.
- */
