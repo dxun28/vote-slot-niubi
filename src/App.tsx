@@ -134,19 +134,23 @@ useEffect(() => {
     });
   };
 
-  const executeConfirmAction = async () => {
+ const executeConfirmAction = async () => {
   if (!confirmAction) return;
 
-  if (confirmAction.type === "delete" && confirmAction.id) {
-    await removePlayer(confirmAction.id);
-  }
+  try {
+    if (confirmAction.type === "delete" && confirmAction.id) {
+      await removePlayer(confirmAction.id);
+    }
 
-  if (confirmAction.type === "reset") {
-    await resetPlayers();
+    if (confirmAction.type === "reset") {
+      await resetPlayers();
+    }
+  } catch (err) {
+    console.error(err);
+  } finally {
+    // 👇 QUAN TRỌNG: luôn đóng popup dù thành công hay lỗi
+    setConfirmAction(null);
   }
-
-  await fetchPlayers?.(); // nếu bạn có fetchPlayers trong hook
-  setConfirmAction(null);
 };
 
   const occupancyRate = Math.min(Math.round((players.length / config.maxSlots) * 100), 100);
