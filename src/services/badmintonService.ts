@@ -99,22 +99,34 @@ useEffect(() => {
   await fetchPlayers(); // 🔥 cực quan trọng
 };
   // REMOVE
-  const removePlayer = async (id: string) => {
-    const { error } = await supabase
-      .from("players")
-      .delete()
-      .eq("id", id);
+ const removePlayer = async (id: string) => {
+  const { error } = await supabase
+    .from("players")
+    .delete()
+    .eq("id", id);
 
-    if (error) console.error(error);
-  };
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  await fetchPlayers(); // 👈 QUAN TRỌNG
+};
 
   // RESET
   const resetPlayers = async () => {
-    const { error } = await supabase.from("players").delete().neq("id", "");
+  const { error } = await supabase
+    .from("players")
+    .delete()
+    .neq("id", "0"); // xóa toàn bộ (hack chuẩn Supabase)
 
-    if (error) console.error(error);
-  };
+  if (error) {
+    console.error(error);
+    return;
+  }
 
+  await fetchPlayers(); // reload lại UI
+};
   // UPDATE CONFIG
 const updateConfig = async (newConfig) => {
   const { error } = await supabase

@@ -134,16 +134,20 @@ useEffect(() => {
     });
   };
 
-  const executeConfirmAction = () => {
-    if (!confirmAction) return;
+  const executeConfirmAction = async () => {
+  if (!confirmAction) return;
 
-    if (confirmAction.type === 'delete' && confirmAction.id) {
-      removePlayer(confirmAction.id);
-    } else if (confirmAction.type === 'reset') {
-      resetPlayers();
-    }
-    setConfirmAction(null);
-  };
+  if (confirmAction.type === "delete" && confirmAction.id) {
+    await removePlayer(confirmAction.id);
+  }
+
+  if (confirmAction.type === "reset") {
+    await resetPlayers();
+  }
+
+  await fetchPlayers?.(); // nếu bạn có fetchPlayers trong hook
+  setConfirmAction(null);
+};
 
   const occupancyRate = Math.min(Math.round((players.length / config.maxSlots) * 100), 100);
 
