@@ -42,16 +42,16 @@ export function useBadmintonData() {
   const { data, error } = await supabase
     .from("config")
     .select("*")
+    .eq("id", 1)
     .single();
 
   if (error) {
-    console.error(error);
-    return;
+    console.error("fetchConfig error:", error);
+    return null;
   }
 
-  setConfig(data);
+  return data;
 };
-
   // INIT + REALTIME
 useEffect(() => {
   const init = async () => {
@@ -120,10 +120,10 @@ const updateConfig = async (newConfig) => {
       session_time: newConfig.sessionTime,
       max_slots: newConfig.maxSlots,
     })
-    .eq("id", newConfig.id)
+    .eq("id", 1); // ⭐ cực kỳ quan trọng
 
   if (error) {
-    console.error("Update config error:", error);
+    console.error("updateConfig error:", error);
   }
 };
 
