@@ -112,14 +112,18 @@ useEffect(() => {
   };
 
   // UPDATE CONFIG
-  const updateConfig = async (newConfig: Partial<AppConfig>) => {
-    const { error } = await supabase
-      .from("config")
-      .update(newConfig)
-      .eq("id", 1);
+const updateConfig = async (newConfig) => {
+  const { error } = await supabase
+    .from("config")
+    .update({
+      session_title: newConfig.sessionTitle,
+      session_time: newConfig.sessionTime,
+      max_slots: newConfig.maxSlots,
+    });
 
-    if (error) console.error(error);
-  };
+  if (error) console.error(error);
+
+};
 
   return {
     players,
