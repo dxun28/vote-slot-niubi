@@ -24,33 +24,43 @@ export function useBadmintonData() {
   const [loading, setLoading] = useState(true);
 
   // FETCH DATA
-  const fetchPlayers = async () => {
-    const { data } = await supabase
-      .from("players")
-      .select("*")
-      .order("created_at", { ascending: true });
+ const fetchPlayers = async () => {
+  const { data, error } = await supabase
+    .from("players")
+    .select("*")
+    .order("created_at", { ascending: true });
 
-    setPlayers(data || []);
-  };
+  if (error) {
+    console.error(error);
+    return;
+  }
 
-  const fetchConfig = async () => {
-    const { data } = await supabase
-      .from("config")
-      .select("*")
-      .single();
+  setPlayers(data || []);
+};
 
-    if (data) setConfig(data);
-  };
+ const fetchConfig = async () => {
+  const { data, error } = await supabase
+    .from("config")
+    .select("*")
+    .single();
+
+  if (error) {
+    console.error(error);
+    return;
+  }
+
+  setConfig(data);
+};
 
   // INIT + REALTIME
-  useEffect(() => {
-    const init = async () => {
-      await fetchPlayers();
-      await fetchConfig();
-      setLoading(false);
-    };
+useEffect(() => {
+  const init = async () => {
+    await fetchPlayers();
+    await fetchConfig();
+    setLoading(false);
+  };
 
-    init();
+  init();
 
     const channel = supabase
       .channel("realtime-badminton")
@@ -73,13 +83,17 @@ export function useBadmintonData() {
 
   // ADD PLAYER (🔥 QUAN TRỌNG)
   const addPlayer = async (name: string) => {
-    const { error } = await supabase.from("players").insert([
-      { name }
-    ]);
+  const { error } = await supabase.from("players").insert([
+    { name }
+  ]);
 
-    if (error) console.error("ADD ERROR:", error);
-  };
+  if (error) {
+    console.error(error);
+    return;
+  }
 
+  await fetchPlayers(); // 🔥 cực quan trọng
+};
   // REMOVE
   const removePlayer = async (id: string) => {
     const { error } = await supabase

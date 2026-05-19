@@ -16,35 +16,43 @@ export default function App() {
     id?: string;
     message: string;
   } | null>(null);
-
+console.log("players:", players);
   // Admin input states which should be initialized with config
   const [editTitle, setEditTitle] = useState(config.sessionTitle);
   const [editTime, setEditTime] = useState(config.sessionTime);
   const [editMaxSlots, setEditMaxSlots] = useState(config.maxSlots);
-  const fetchPlayers = async () => {
-  const { data } = await supabase
+ const fetchPlayers = async () => {
+  const { data, error } = await supabase
     .from("players")
     .select("*")
     .order("created_at", { ascending: true });
 
-  return data || [];
-};
+  if (error) {
+    console.error(error);
+    return;
+  }
 
-  const fetchConfig = async () => {
-  const { data } = await supabase
+  setPlayers(data || []);
+};
+const fetchConfig = async () => {
+  const { data, error } = await supabase
     .from("config")
     .select("*")
     .single();
 
-  return data;
-};
-  // Update local edit states when config changes
- useEffect(() => {
-  let isMounted = true;
+  if (error) {
+    console.error(error);
+    return;
+  }
 
+  setConfig(data);
+}; 
+  // Update local edit states when config changes
+useEffect(() => {
   const init = async () => {
     await fetchPlayers();
     await fetchConfig();
+    setLoading(false);
   };
 
   init();
