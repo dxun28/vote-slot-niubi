@@ -38,19 +38,23 @@ export function useBadmintonData() {
   setPlayers(data || []);
 };
 
- const fetchConfig = async () => {
+const fetchConfig = async () => {
   const { data, error } = await supabase
     .from("config")
     .select("*")
-    .eq("id", 1)
+    .eq("id", 1)   // 👈 QUAN TRỌNG
     .single();
 
   if (error) {
-    console.error("fetchConfig error:", error);
-    return null;
+    console.error(error);
+    return;
   }
 
-  return data;
+  setConfig({
+    sessionTitle: data.session_title,
+    sessionTime: data.session_time,
+    maxSlots: data.max_slots
+  });
 };
   // INIT + REALTIME
 useEffect(() => {
@@ -120,23 +124,14 @@ const updateConfig = async (newConfig) => {
       session_time: newConfig.sessionTime,
       max_slots: newConfig.maxSlots,
     })
-    .eq("id", 1);
+    .eq("id", 1); // 👈 QUAN TRỌNG
 
   if (error) {
     console.error(error);
     return;
   }
 
-  // ⭐ FIX QUAN TRỌNG: load lại config ngay sau khi update
-  const { data, error: fetchError } = await supabase
-    .from("config")
-    .select("*")
-    .eq("id", 1)
-    .single();
-
-  if (!fetchError && data) {
-    setConfig(data); // ⭐ cập nhật UI ngay lập tức
-  }
+  await fetchConfig(); // 👈 FORCE REFRESH UI
 };
 
   return {
