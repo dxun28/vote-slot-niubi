@@ -127,17 +127,15 @@ const updateConfig = async (newConfig) => {
     return;
   }
 
-  // ⭐ FIX QUAN TRỌNG: reload lại config
-  const { data } = await supabase
+  // ⭐ FIX QUAN TRỌNG: load lại config ngay sau khi update
+  const { data, error: fetchError } = await supabase
     .from("config")
     .select("*")
     .eq("id", 1)
     .single();
 
-  if (data) {
-    // cập nhật lại UI bằng event giống players
-    localStorage.setItem("badminton_config", JSON.stringify(data));
-    window.dispatchEvent(new Event("storage_update"));
+  if (!fetchError && data) {
+    setConfig(data); // ⭐ cập nhật UI ngay lập tức
   }
 };
 
