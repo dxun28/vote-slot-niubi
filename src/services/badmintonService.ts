@@ -119,10 +119,12 @@ const updateConfig = async (newConfig) => {
       session_title: newConfig.sessionTitle,
       session_time: newConfig.sessionTime,
       max_slots: newConfig.maxSlots,
-    });
+    })
+    .eq("id", newConfig.id)
 
-  if (error) console.error(error);
-
+  if (error) {
+    console.error("Update config error:", error);
+  }
 };
 
   return {
