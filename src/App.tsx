@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2 } from "lucide-react";
 import { useBadmintonData } from "./services/badmintonService";
+import { supabase } from "./supabase"
 
 export default function App() {
   const { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig } = useBadmintonData();
@@ -20,13 +21,57 @@ export default function App() {
   const [editTitle, setEditTitle] = useState(config.sessionTitle);
   const [editTime, setEditTime] = useState(config.sessionTime);
   const [editMaxSlots, setEditMaxSlots] = useState(config.maxSlots);
+  const fetchPlayers = async () => {
+  const { data } = await supabase
+    .from("players")
+    .select("*")
+    .order("created_at", { ascending: true });
 
+  return data || [];
+};
+
+  const fetchConfig = async () => {
+  const { data } = await supabase
+    .from("config")
+    .select("*")
+    .single();
+
+  return data;
+};
   // Update local edit states when config changes
-  useEffect(() => {
-    setEditTitle(config.sessionTitle);
-    setEditTime(config.sessionTime);
-    setEditMaxSlots(config.maxSlots);
-  }, [config]);
+ useEffect(() => {
+  let isMounted = true;
+
+  const init = async () => {
+    await fetchPlayers();
+    await fetchConfig();
+  };
+
+  init();
+
+  const channel = supabase
+    .channel("badminton-realtime")
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "players" },
+      async () => {
+        await fetchPlayers();
+      }
+    )
+    .on(
+      "postgres_changes",
+      { event: "*", schema: "public", table: "config" },
+      async () => {
+        await fetchConfig();
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+    isMounted = false;
+  };
+}, []);
 
   const handleAdminAuth = (e: React.FormEvent) => {
     e.preventDefault();
