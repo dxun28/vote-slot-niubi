@@ -120,10 +120,24 @@ const updateConfig = async (newConfig) => {
       session_time: newConfig.sessionTime,
       max_slots: newConfig.maxSlots,
     })
-    .eq("id", 1); // ⭐ cực kỳ quan trọng
+    .eq("id", 1);
 
   if (error) {
-    console.error("updateConfig error:", error);
+    console.error(error);
+    return;
+  }
+
+  // ⭐ FIX QUAN TRỌNG: reload lại config
+  const { data } = await supabase
+    .from("config")
+    .select("*")
+    .eq("id", 1)
+    .single();
+
+  if (data) {
+    // cập nhật lại UI bằng event giống players
+    localStorage.setItem("badminton_config", JSON.stringify(data));
+    window.dispatchEvent(new Event("storage_update"));
   }
 };
 
