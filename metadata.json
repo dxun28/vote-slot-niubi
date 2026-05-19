@@ -1,0 +1,6 @@
+{
+  "name": "Cầu Lông NiuBi",
+  "description": "Ứng dụng đặt slot cầu lông đơn giản với chế độ quản trị viên cho NiuBi Team.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

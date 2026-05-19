@@ -1,0 +1,35 @@
+{
+  "entities": {
+    "Player": {
+      "title": "Player",
+      "description": "Thành viên tham gia buổi tập cầu lông.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Tên người chơi" },
+        "timestamp": { "type": "number", "description": "Thời điểm đăng ký" }
+      },
+      "required": ["name", "timestamp"]
+    },
+    "AppConfig": {
+      "title": "AppConfig",
+      "description": "Cấu hình buổi tập và slot tối đa.",
+      "type": "object",
+      "properties": {
+        "sessionTitle": { "type": "string", "description": "Tiêu đề buổi đánh" },
+        "sessionTime": { "type": "string", "description": "Thời gian tập" },
+        "maxSlots": { "type": "number", "description": "Số slot tối đa" }
+      },
+      "required": ["sessionTitle", "sessionTime", "maxSlots"]
+    }
+  },
+  "firestore": {
+    "/players/{playerId}": {
+      "schema": "Player",
+      "description": "Danh sách người chơi tham gia."
+    },
+    "/configs/main": {
+      "schema": "AppConfig",
+      "description": "Cấu hình chung của ứng dụng."
+    }
+  }
+}
