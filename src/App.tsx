@@ -64,13 +64,13 @@ export default function App() {
     }
   };
 
-  const handleUpdateConfig = () => {
-    updateConfig({
+  const handleUpdateConfig = async () => {
+    const ok = await updateConfig({
       sessionTitle: editTitle,
       sessionTime: editTime,
-      maxSlots: editMaxSlots
+      maxSlots: editMaxSlots,
     });
-    alert("Cập nhật thành công!");
+    if (ok) alert("Cập nhật thành công!");
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -217,7 +217,9 @@ export default function App() {
             </p>
             <div className="flex gap-2 overflow-x-auto pb-1 items-stretch">
               {sessions.map((session) => {
-                const isActive = session.id === activeSessionId;
+                const isActive =
+                  activeSessionId !== null &&
+                  String(session.id) === String(activeSessionId);
                 const filled = players.length;
                 const isCurrentTab = isActive && !playersLoading;
                 return (

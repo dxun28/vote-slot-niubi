@@ -1,17 +1,19 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { supabase } from "../supabase";
 
+export type SessionId = number | string;
+
 export interface Player {
   id: string;
   name: string;
   created_at?: string;
   attended: boolean;
   paid: boolean;
-  session_id?: number;
+  session_id?: SessionId;
 }
 
 export interface Session {
-  id: number;
+  id: SessionId;
   sessionTitle: string;
   sessionTime: string;
   maxSlots: number;
@@ -24,18 +26,28 @@ type PlayerRow = {
   created_at?: string;
   attended?: boolean;
   paid?: boolean;
-  session_id?: number;
+  session_id?: SessionId;
 };
 
 type ConfigRow = {
-  id: number;
+  id: SessionId;
   session_title: string;
   session_time: string;
   max_slots: number;
   session_date?: string;
 };
 
-const PLAYER_COLUMNS = "id, name, created_at, attended, paid, session_id";
+const PLAYER_SELECT =
+  "id, name, created_at, attended, paid, session_id";
+const CONFIG_SELECT = "id, session_title, session_time, max_slots";
+const CONFIG_SELECT_FULL = `${CONFIG_SELECT}, session_date`;
+
+function supabaseErr(error: unknown): string {
+  if (error && typeof error === "object" && "message" in error) {
+    return String((error as { message: string }).message);
+  }
+  return "Lỗi không xác định";
+}
 
 function mapPlayer(row: PlayerRow): Player {
   return {
@@ -58,49 +70,41 @@ function mapSession(row: ConfigRow): Session {
   };
 }
 
-function statusErrorMessage(field: "attended" | "paid", error: unknown): string {
-  const detail =
-    error && typeof error === "object" && "message" in error
-      ? String((error as { message: string }).message)
-      : "";
-
-  if (field === "paid") {
-    return (
-      "Không lưu được trạng thái CK.\n\n" +
-      "Chạy supabase/fix_players_paid_persist.sql trong Supabase SQL Editor.\n\n" +
-      (detail ? `Chi tiết: ${detail}` : "")
-    );
-  }
-
-  return `Không lưu được điểm danh.${detail ? `\n\nChi tiết: ${detail}` : ""}`;
-}
-
-function readSessionIdFromUrl(): number | null {
+function readSessionIdFromUrl(): SessionId | null {
   const raw = new URLSearchParams(window.location.search).get("buoi");
   if (!raw) return null;
-  const id = Number(raw);
-  return Number.isFinite(id) ? id : null;
+  const asNum = Number(raw);
+  return Number.isFinite(asNum) && String(asNum) === raw ? asNum : raw;
 }
 
-function writeSessionIdToUrl(sessionId: number) {
+function writeSessionIdToUrl(sessionId: SessionId) {
   const url = new URL(window.location.href);
   url.searchParams.set("buoi", String(sessionId));
   window.history.replaceState({}, "", url.toString());
 }
 
+function sameSessionId(a: SessionId | null, b: SessionId): boolean {
+  return a !== null && String(a) === String(b);
+}
+
+const SQL_HINT =
+  "\n\n→ Vào Supabase → SQL Editor → chạy file supabase/setup_all.sql";
+
 export function useBadmintonData() {
   const [sessions, setSessions] = useState<Session[]>([]);
-  const [activeSessionId, setActiveSessionId] = useState<number | null>(
+  const [activeSessionId, setActiveSessionId] = useState<SessionId | null>(
     readSessionIdFromUrl
   );
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [playersLoading, setPlayersLoading] = useState(false);
-  const activeSessionIdRef = useRef<number | null>(activeSessionId);
+  const activeSessionIdRef = useRef<SessionId | null>(activeSessionId);
   activeSessionIdRef.current = activeSessionId;
 
   const activeSession =
-    sessions.find((s) => s.id === activeSessionId) ?? sessions[0] ?? null;
+    sessions.find((s) => sameSessionId(activeSessionId, s.id)) ??
+    sessions[0] ??
+    null;
 
   const config = activeSession
     ? {
@@ -114,14 +118,24 @@ export function useBadmintonData() {
         maxSlots: 12,
       };
 
-  const fetchSessions = useCallback(async () => {
-    const { data, error } = await supabase
+  const fetchSessions = useCallback(async (): Promise<Session[]> => {
+    let { data, error } = await supabase
       .from("config")
-      .select("id, session_title, session_time, max_slots, session_date")
+      .select(CONFIG_SELECT_FULL)
       .order("id", { ascending: true });
 
     if (error) {
+      const retry = await supabase
+        .from("config")
+        .select(CONFIG_SELECT)
+        .order("id", { ascending: true });
+      data = retry.data as typeof data;
+      error = retry.error;
+    }
+
+    if (error) {
       console.error("fetchSessions:", error);
+      alert(`Không tải danh sách buổi tập.${SQL_HINT}\n\n${supabaseErr(error)}`);
       return [];
     }
 
@@ -130,40 +144,31 @@ export function useBadmintonData() {
     return list;
   }, []);
 
-  const fetchPlayers = useCallback(async (sessionId: number | null) => {
-    if (!sessionId) {
+  const fetchPlayers = useCallback(async (sessionId: SessionId | null) => {
+    if (sessionId === null) {
       setPlayers([]);
       return;
     }
 
-    let query = supabase
+    const { data, error } = await supabase
       .from("players")
-      .select(PLAYER_COLUMNS)
+      .select(PLAYER_SELECT)
+      .eq("session_id", sessionId)
       .order("created_at", { ascending: true });
-
-    query = query.eq("session_id", sessionId);
-
-    const { data, error } = await query;
 
     if (error) {
       console.error("fetchPlayers:", error);
-      if (error.message?.includes("session_id")) {
+      if (String(error.message).includes("session_id")) {
         const fallback = await supabase
           .from("players")
-          .select(PLAYER_COLUMNS)
+          .select("id, name, created_at, attended, paid")
           .order("created_at", { ascending: true });
         if (!fallback.error) {
-          setPlayers((fallback.data as PlayerRow[] | null)?.map(mapPlayer) ?? []);
+          setPlayers(
+            (fallback.data as PlayerRow[] | null)?.map(mapPlayer) ?? []
+          );
         }
         return;
-      }
-      if (
-        error.message?.includes("attended") ||
-        error.message?.includes("paid")
-      ) {
-        alert(
-          "Bảng players thiếu cột attended/paid.\nChạy supabase/fix_players_paid_persist.sql trong Supabase SQL Editor."
-        );
       }
       return;
     }
@@ -176,12 +181,12 @@ export function useBadmintonData() {
       const list = await fetchSessions();
       const urlId = readSessionIdFromUrl();
       const initialId =
-        urlId && list.some((s) => s.id === urlId)
+        urlId !== null && list.some((s) => sameSessionId(urlId, s.id))
           ? urlId
           : list[0]?.id ?? null;
 
       setActiveSessionId(initialId);
-      if (initialId) writeSessionIdToUrl(initialId);
+      if (initialId !== null) writeSessionIdToUrl(initialId);
       setLoading(false);
     };
 
@@ -194,14 +199,14 @@ export function useBadmintonData() {
         { event: "*", schema: "public", table: "players" },
         () => {
           const sid = activeSessionIdRef.current;
-          if (sid) fetchPlayers(sid);
+          if (sid !== null) fetchPlayers(sid);
         }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "config" },
-        async () => {
-          await fetchSessions();
+        () => {
+          fetchSessions();
         }
       )
       .subscribe();
@@ -212,7 +217,7 @@ export function useBadmintonData() {
   }, [fetchSessions, fetchPlayers]);
 
   useEffect(() => {
-    if (loading || !activeSessionId) return;
+    if (loading || activeSessionId === null) return;
 
     const load = async () => {
       setPlayersLoading(true);
@@ -224,45 +229,40 @@ export function useBadmintonData() {
     load();
   }, [activeSessionId, loading, fetchPlayers]);
 
-  const selectSession = (sessionId: number) => {
+  const selectSession = (sessionId: SessionId) => {
     setActiveSessionId(sessionId);
   };
 
   const addPlayer = async (name: string) => {
-    if (!activeSessionId) return;
+    if (activeSessionId === null) return false;
 
-    const row: { name: string; session_id: number } = {
-      name,
-      session_id: activeSessionId,
-    };
-
-    const { error } = await supabase.from("players").insert([row]);
+    const { error } = await supabase.from("players").insert([
+      { name, session_id: activeSessionId },
+    ]);
 
     if (error) {
-      console.error(error);
       const fallback = await supabase.from("players").insert([{ name }]);
       if (fallback.error) {
-        alert("Không thêm được thành viên. Thử lại sau.");
-        return;
+        alert(`Không thêm được thành viên.\n${supabaseErr(fallback.error)}`);
+        return false;
       }
     }
 
     await fetchPlayers(activeSessionId);
+    return true;
   };
 
   const removePlayer = async (id: string) => {
     const { error } = await supabase.from("players").delete().eq("id", id);
-
     if (error) {
       console.error(error);
       return;
     }
-
-    if (activeSessionId) await fetchPlayers(activeSessionId);
+    if (activeSessionId !== null) await fetchPlayers(activeSessionId);
   };
 
   const resetPlayers = async () => {
-    if (!activeSessionId) return;
+    if (activeSessionId === null) return;
 
     const { error } = await supabase
       .from("players")
@@ -284,28 +284,40 @@ export function useBadmintonData() {
     sessionTitle: string;
     sessionTime: string;
     maxSlots: number;
-  }) => {
-    if (!activeSessionId) return;
+  }): Promise<boolean> => {
+    if (activeSessionId === null) return false;
 
-    const { error } = await supabase
+    const payload = {
+      session_title: newConfig.sessionTitle.trim(),
+      session_time: newConfig.sessionTime.trim(),
+      max_slots: newConfig.maxSlots,
+    };
+
+    const { data, error } = await supabase
       .from("config")
-      .update({
-        session_title: newConfig.sessionTitle,
-        session_time: newConfig.sessionTime,
-        max_slots: newConfig.maxSlots,
-      })
-      .eq("id", activeSessionId);
+      .update(payload)
+      .eq("id", activeSessionId)
+      .select(CONFIG_SELECT)
+      .maybeSingle();
 
-    if (error) {
-      console.error(error);
-      alert("Không cập nhật được buổi tập.");
-      return;
+    if (error || !data) {
+      console.error("updateConfig:", error);
+      alert(
+        `Không lưu được cấu hình buổi tập.${SQL_HINT}\n\n${
+          error ? supabaseErr(error) : "Không có dòng nào được cập nhật (RLS hoặc sai id)."
+        }`
+      );
+      return false;
     }
 
-    await fetchSessions();
+    const updated = mapSession(data as ConfigRow);
+    setSessions((prev) =>
+      prev.map((s) => (sameSessionId(activeSessionId, s.id) ? updated : s))
+    );
+    return true;
   };
 
-  const createSession = async () => {
+  const createSession = async (): Promise<Session | null> => {
     const today = new Date();
     const label = today.toLocaleDateString("vi-VN", {
       weekday: "long",
@@ -313,21 +325,32 @@ export function useBadmintonData() {
       month: "2-digit",
     });
 
-    const { data, error } = await supabase
+    const base = {
+      session_title: `Buổi ${label}`,
+      session_time: "08:00 - 10:00",
+      max_slots: 12,
+    };
+
+    let { data, error } = await supabase
       .from("config")
-      .insert({
-        session_title: `Buổi ${label}`,
-        session_time: "08:00 - 10:00",
-        max_slots: 12,
-        session_date: today.toISOString().slice(0, 10),
-      })
-      .select("id, session_title, session_time, max_slots, session_date")
+      .insert({ ...base, session_date: today.toISOString().slice(0, 10) })
+      .select(CONFIG_SELECT_FULL)
       .single();
 
     if (error) {
-      console.error(error);
+      const retry = await supabase
+        .from("config")
+        .insert(base)
+        .select(CONFIG_SELECT)
+        .single();
+      data = retry.data as typeof data;
+      error = retry.error;
+    }
+
+    if (error || !data) {
+      console.error("createSession:", error);
       alert(
-        "Không tạo buổi mới.\nChạy supabase/multi_sessions.sql trong Supabase SQL Editor."
+        `Không tạo buổi mới.${SQL_HINT}\n\n${supabaseErr(error ?? "Không trả về dữ liệu")}`
       );
       return null;
     }
@@ -340,7 +363,7 @@ export function useBadmintonData() {
     return session;
   };
 
-  const deleteSession = async (sessionId: number) => {
+  const deleteSession = async (sessionId: SessionId) => {
     if (sessions.length <= 1) {
       alert("Phải giữ ít nhất một buổi vote.");
       return false;
@@ -349,15 +372,14 @@ export function useBadmintonData() {
     const { error } = await supabase.from("config").delete().eq("id", sessionId);
 
     if (error) {
-      console.error(error);
-      alert("Không xóa được buổi này.");
+      alert(`Không xóa được buổi.\n${supabaseErr(error)}`);
       return false;
     }
 
     const list = await fetchSessions();
     const nextId = list[0]?.id ?? null;
     setActiveSessionId(nextId);
-    if (nextId) {
+    if (nextId !== null) {
       writeSessionIdToUrl(nextId);
       await fetchPlayers(nextId);
     } else {
@@ -370,23 +392,29 @@ export function useBadmintonData() {
     id: string,
     field: "attended" | "paid",
     value: boolean
-  ) => {
+  ): Promise<boolean> => {
     const { data, error } = await supabase
       .from("players")
       .update({ [field]: value })
       .eq("id", id)
-      .select(PLAYER_COLUMNS)
+      .select("id, name, created_at, attended, paid")
       .maybeSingle();
 
     if (error || !data) {
-      console.error("updatePlayerStatus:", error ?? "no row returned");
-      alert(statusErrorMessage(field, error));
-      if (activeSessionId) await fetchPlayers(activeSessionId);
-      return;
+      console.error("updatePlayerStatus:", error);
+      const label = field === "paid" ? "CK" : "điểm danh";
+      alert(
+        `Không lưu được ${label}.${SQL_HINT}\n\n${
+          error ? supabaseErr(error) : "Không có dòng nào được cập nhật."
+        }`
+      );
+      if (activeSessionId !== null) await fetchPlayers(activeSessionId);
+      return false;
     }
 
     const updated = mapPlayer(data as PlayerRow);
     setPlayers((prev) => prev.map((p) => (p.id === id ? updated : p)));
+    return true;
   };
 
   return {
@@ -405,4 +433,4 @@ export function useBadmintonData() {
     createSession,
     deleteSession,
   };
-}
+};
