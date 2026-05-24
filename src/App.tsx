@@ -1,18 +1,36 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2, UserCheck, Banknote } from "lucide-react";
+import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2, UserCheck, Banknote, CalendarPlus, X } from "lucide-react";
 import { useBadmintonData } from "./services/badmintonService";
 
 export default function App() {
-  const { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig, updatePlayerStatus } = useBadmintonData();
+  const {
+    sessions,
+    activeSessionId,
+    selectSession,
+    players,
+    config,
+    loading,
+    playersLoading,
+    addPlayer,
+    removePlayer,
+    resetPlayers,
+    updateConfig,
+    updatePlayerStatus,
+    createSession,
+    deleteSession,
+  } = useBadmintonData();
+  const joinFormRef = useRef<HTMLDivElement>(null);
+  const nameInputRef = useRef<HTMLInputElement>(null);
   const [name, setName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPwdInput, setShowPwdInput] = useState(false);
   const [adminPwd, setAdminPwd] = useState("");
   const [adminError, setAdminError] = useState("");
   const [confirmAction, setConfirmAction] = useState<{
-    type: 'delete' | 'reset';
+    type: "delete" | "reset" | "deleteSession";
     id?: string;
+    sessionId?: number;
     message: string;
   } | null>(null);
 
@@ -74,9 +92,23 @@ export default function App() {
   const handleReset = () => {
     if (!isAdmin) return;
     setConfirmAction({
-      type: 'reset',
-      message: "Bạn có chắc chắn muốn XÓA TOÀN BỘ danh sách thành viên hiện tại? Hành động này không thể hoàn tác."
+      type: "reset",
+      message: "Bạn có chắc chắn muốn XÓA TOÀN BỘ danh sách thành viên buổi này? Hành động này không thể hoàn tác.",
     });
+  };
+
+  const handleDeleteSession = (sessionId: number, title: string) => {
+    if (!isAdmin) return;
+    setConfirmAction({
+      type: "deleteSession",
+      sessionId,
+      message: `Xóa buổi "${title}" và toàn bộ đăng ký của buổi đó?`,
+    });
+  };
+
+  const scrollToJoinForm = () => {
+    joinFormRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => nameInputRef.current?.focus(), 400);
   };
 
  const executeConfirmAction = async () => {
@@ -89,6 +121,10 @@ export default function App() {
 
     if (confirmAction.type === "reset") {
       await resetPlayers();
+    }
+
+    if (confirmAction.type === "deleteSession" && confirmAction.sessionId) {
+      await deleteSession(confirmAction.sessionId);
     }
   } catch (err) {
     console.error(err);
@@ -121,14 +157,15 @@ export default function App() {
           <span className="text-lg md:text-xl font-bold tracking-tight uppercase">Cầu Lông NiuBi</span>
         </div>
         <div className="flex space-x-2 md:space-x-6 items-center text-xs md:text-sm font-medium">
-          <a 
-            href="#" 
+          <button
+            type="button"
+            onClick={scrollToJoinForm}
             className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all border border-white/20"
           >
             <Plus size={14} className="text-emerald-200" />
             <span className="hidden sm:inline">Đăng Ký Slot</span>
             <span className="sm:hidden">Đăng ký</span>
-          </a>
+          </button>
           <button 
             onClick={handleAdminToggle}
             className={`flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 rounded-full transition-all ${isAdmin ? 'bg-amber-400 text-slate-900 font-bold' : 'bg-emerald-600/50 hover:bg-emerald-600 text-white border border-emerald-500/30'}`}
@@ -171,6 +208,56 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Chọn buổi / ngày vote */}
+      {sessions.length > 0 && (
+        <div className="bg-white border-b border-slate-200 shadow-sm">
+          <div className="container mx-auto px-4 md:px-8 py-3">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 mb-2">
+              Chọn buổi đăng ký
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1 items-stretch">
+              {sessions.map((session) => {
+                const isActive = session.id === activeSessionId;
+                const filled = players.length;
+                const isCurrentTab = isActive && !playersLoading;
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    onClick={() => selectSession(session.id)}
+                    className={`shrink-0 min-w-[140px] max-w-[220px] text-left px-3 py-2.5 rounded-xl border transition-all ${
+                      isActive
+                        ? "bg-emerald-600 border-emerald-600 text-white shadow-md"
+                        : "bg-slate-50 border-slate-200 text-slate-700 hover:border-emerald-300"
+                    }`}
+                  >
+                    <div className="text-xs font-bold truncate">{session.sessionTitle}</div>
+                    <div className={`text-[10px] mt-0.5 truncate ${isActive ? "text-emerald-100" : "text-slate-500"}`}>
+                      {session.sessionTime}
+                    </div>
+                    {isCurrentTab && (
+                      <div className={`text-[9px] mt-1 font-bold ${isActive ? "text-emerald-200" : "text-emerald-600"}`}>
+                        {filled}/{session.maxSlots} người
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+              {isAdmin && (
+                <button
+                  type="button"
+                  onClick={() => createSession()}
+                  className="shrink-0 px-4 py-2.5 rounded-xl border-2 border-dashed border-emerald-400 text-emerald-700 hover:bg-emerald-50 flex flex-col items-center justify-center gap-1 min-w-[100px]"
+                >
+                  <CalendarPlus size={18} />
+                  <span className="text-[10px] font-bold uppercase">Buổi mới</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <main className="flex-1 container mx-auto p-4 md:p-8 flex flex-col lg:flex-row gap-8">
         {/* Left Section: Participant List */}
         <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col mb-4 lg:mb-0">
@@ -185,6 +272,11 @@ export default function App() {
           </div>
           
           <div className="flex-1 p-4 md:p-6 overflow-y-auto max-h-[60vh] md:max-h-full">
+            {playersLoading && (
+              <p className="text-center text-sm text-emerald-600 font-medium py-4 animate-pulse">
+                Đang tải danh sách...
+              </p>
+            )}
             <div className={`grid gap-4 ${isAdmin ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
               <AnimatePresence initial={false}>
                 {players.map((player, index) => (
@@ -263,19 +355,28 @@ export default function App() {
             )}
           </div>
 
-          <div className="p-6 bg-slate-50 rounded-b-xl border-t border-slate-200">
+          <div
+            ref={joinFormRef}
+            id="dang-ky-slot"
+            className="p-6 bg-slate-50 rounded-b-xl border-t border-slate-200 scroll-mt-24"
+          >
+            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+              <Plus size={16} className="text-emerald-600" />
+              Đăng ký tham gia buổi này
+            </h3>
             <form onSubmit={handleJoin} className="flex flex-col sm:flex-row gap-3">
               <input
+                ref={nameInputRef}
                 type="text"
                 className="flex-1 bg-white border border-slate-300 rounded-lg px-4 py-3 text-slate-700 focus:outline-none focus:ring-2 focus:ring-emerald-500 transition-all font-medium"
                 placeholder="Nhập tên đầy đủ..."
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                disabled={players.length >= config.maxSlots}
+                disabled={players.length >= config.maxSlots || playersLoading}
               />
               <button 
                 type="submit"
-                disabled={players.length >= config.maxSlots}
+                disabled={players.length >= config.maxSlots || playersLoading}
                 className="bg-emerald-600 text-white font-bold py-3 px-8 rounded-lg hover:bg-emerald-700 transition-all shadow-md active:scale-95 disabled:opacity-50"
               >
                 {players.length >= config.maxSlots ? 'HẾT CHỖ' : 'THAM GIA'}
@@ -333,8 +434,21 @@ export default function App() {
                   onClick={handleUpdateConfig}
                   className="w-full py-2 bg-emerald-600 hover:bg-emerald-500 rounded text-xs font-bold transition-colors"
                 >
-                  Lưu cấu hình
+                  Lưu cấu hình buổi này
                 </button>
+                {activeSessionId && sessions.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const s = sessions.find((x) => x.id === activeSessionId);
+                      if (s) handleDeleteSession(s.id, s.sessionTitle);
+                    }}
+                    className="w-full py-2 border border-red-500/50 text-red-400 hover:bg-red-500/10 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1"
+                  >
+                    <X size={14} />
+                    Xóa buổi vote này
+                  </button>
+                )}
               </div>
               
               <div className="border-t border-slate-700 pt-4 space-y-3">
