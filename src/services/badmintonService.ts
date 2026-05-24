@@ -5,6 +5,26 @@ export interface Player {
   id: string;
   name: string;
   created_at?: string;
+  attended: boolean;
+  paid: boolean;
+}
+
+type PlayerRow = {
+  id: string;
+  name: string;
+  created_at?: string;
+  attended?: boolean;
+  paid?: boolean;
+};
+
+function mapPlayer(row: PlayerRow): Player {
+  return {
+    id: row.id,
+    name: row.name,
+    created_at: row.created_at,
+    attended: row.attended ?? false,
+    paid: row.paid ?? false,
+  };
 }
 
 export interface AppConfig {
@@ -35,7 +55,7 @@ export function useBadmintonData() {
     return;
   }
 
-  setPlayers(data || []);
+  setPlayers((data as PlayerRow[] | null)?.map(mapPlayer) ?? []);
 };
 
 const fetchConfig = async () => {
@@ -88,7 +108,7 @@ useEffect(() => {
   // ADD PLAYER (🔥 QUAN TRỌNG)
   const addPlayer = async (name: string) => {
   const { error } = await supabase.from("players").insert([
-    { name }
+    { name, attended: false, paid: false }
   ]);
 
   if (error) {
@@ -128,7 +148,7 @@ useEffect(() => {
   await fetchPlayers(); // reload lại UI
 };
   // UPDATE CONFIG
-const updateConfig = async (newConfig) => {
+const updateConfig = async (newConfig: AppConfig) => {
   const { error } = await supabase
     .from("config")
     .update({
@@ -146,6 +166,26 @@ const updateConfig = async (newConfig) => {
   await fetchConfig(); // 👈 FORCE REFRESH UI
 };
 
+  const updatePlayerStatus = async (
+    id: string,
+    field: "attended" | "paid",
+    value: boolean
+  ) => {
+    setPlayers((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    );
+
+    const { error } = await supabase
+      .from("players")
+      .update({ [field]: value })
+      .eq("id", id);
+
+    if (error) {
+      console.error(error);
+      await fetchPlayers();
+    }
+  };
+
   return {
     players,
     config,
@@ -153,6 +193,7 @@ const updateConfig = async (newConfig) => {
     addPlayer,
     removePlayer,
     resetPlayers,
-    updateConfig
+    updateConfig,
+    updatePlayerStatus,
   };
 }

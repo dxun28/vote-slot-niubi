@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2 } from "lucide-react";
+import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2, UserCheck, Banknote } from "lucide-react";
 import { useBadmintonData } from "./services/badmintonService";
-import { supabase } from "./supabase"
 
 export default function App() {
-  const { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig } = useBadmintonData();
+  const { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig, updatePlayerStatus } = useBadmintonData();
   const [name, setName] = useState("");
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPwdInput, setShowPwdInput] = useState(false);
@@ -16,70 +15,16 @@ export default function App() {
     id?: string;
     message: string;
   } | null>(null);
-console.log("players:", players);
-  // Admin input states which should be initialized with config
+
   const [editTitle, setEditTitle] = useState(config.sessionTitle);
   const [editTime, setEditTime] = useState(config.sessionTime);
   const [editMaxSlots, setEditMaxSlots] = useState(config.maxSlots);
- const fetchPlayers = async () => {
-  const { data, error } = await supabase
-    .from("players")
-    .select("*")
-    .order("created_at", { ascending: true });
 
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  setPlayers(data || []);
-};
-const fetchConfig = async () => {
-  const { data, error } = await supabase
-    .from("config")
-    .select("*")
-    .single();
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  setConfig(data);
-}; 
-  // Update local edit states when config changes
-useEffect(() => {
-  const init = async () => {
-    await fetchPlayers();
-    await fetchConfig();
-    setLoading(false);
-  };
-
-  init();
-
-  const channel = supabase
-    .channel("badminton-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "players" },
-      async () => {
-        await fetchPlayers();
-      }
-    )
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "public", table: "config" },
-      async () => {
-        await fetchConfig();
-      }
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-    isMounted = false;
-  };
-}, []);
+  useEffect(() => {
+    setEditTitle(config.sessionTitle);
+    setEditTime(config.sessionTime);
+    setEditMaxSlots(config.maxSlots);
+  }, [config]);
 
   const handleAdminAuth = (e: React.FormEvent) => {
     e.preventDefault();
@@ -154,6 +99,8 @@ useEffect(() => {
 };
 
   const occupancyRate = Math.min(Math.round((players.length / config.maxSlots) * 100), 100);
+  const attendedCount = players.filter((p) => p.attended).length;
+  const paidCount = players.filter((p) => p.paid).length;
 
   if (loading) {
     return (
@@ -238,7 +185,7 @@ useEffect(() => {
           </div>
           
           <div className="flex-1 p-4 md:p-6 overflow-y-auto max-h-[60vh] md:max-h-full">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className={`grid gap-4 ${isAdmin ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
               <AnimatePresence initial={false}>
                 {players.map((player, index) => (
                   <motion.div
@@ -246,21 +193,53 @@ useEffect(() => {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="p-3 bg-slate-50 rounded-lg border border-slate-200 flex items-center justify-between group hover:border-emerald-300 transition-colors shadow-sm"
+                    className={`p-3 bg-slate-50 rounded-lg border flex items-center gap-2 group transition-colors shadow-sm ${
+                      isAdmin ? "border-slate-200 hover:border-emerald-300" : "border-slate-200 hover:border-emerald-300 justify-between"
+                    } ${player.attended && player.paid ? "ring-1 ring-emerald-200" : ""}`}
                   >
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs font-bold text-slate-400 w-6">{(index + 1).toString().padStart(2, '0')}</span>
-                      <span className="font-semibold text-slate-700">{player.name}</span>
+                    <div className="flex items-center space-x-3 min-w-0 flex-1">
+                      <span className="text-xs font-bold text-slate-400 w-6 shrink-0">{(index + 1).toString().padStart(2, '0')}</span>
+                      <span className="font-semibold text-slate-700 truncate">{player.name}</span>
+                      {!isAdmin && player.paid && (
+                        <span className="text-[9px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">Đã CK</span>
+                      )}
                     </div>
                     {isAdmin ? (
-                      <button 
-                        onClick={() => handleDelete(player.id, player.name)}
-                        className="text-slate-400 hover:text-red-500 transition-colors bg-white p-1 rounded-full border border-slate-200"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => updatePlayerStatus(player.id, "attended", !player.attended)}
+                          title="Điểm danh"
+                          className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                            player.attended
+                              ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
+                              : "bg-white border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-600"
+                          }`}
+                        >
+                          <UserCheck size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updatePlayerStatus(player.id, "paid", !player.paid)}
+                          title="Đã chuyển khoản"
+                          className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
+                            player.paid
+                              ? "bg-amber-500 border-amber-500 text-white shadow-sm"
+                              : "bg-white border-slate-200 text-slate-400 hover:border-amber-400 hover:text-amber-600"
+                          }`}
+                        >
+                          <Banknote size={16} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(player.id, player.name)}
+                          className="w-9 h-9 text-slate-400 hover:text-red-500 transition-colors bg-white flex items-center justify-center rounded-lg border border-slate-200"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     ) : (
-                      <CheckCircle2 size={16} className="text-emerald-500 opacity-60" />
+                      <CheckCircle2 size={16} className="text-emerald-500 opacity-60 shrink-0" />
                     )}
                   </motion.div>
                 ))}
@@ -358,10 +337,14 @@ useEffect(() => {
                 </button>
               </div>
               
-              <div className="space-y-3 border-t border-slate-700 pt-4 text-center">
+              <div className="border-t border-slate-700 pt-4 space-y-3">
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  <span className="text-emerald-400 font-bold">ĐD</span> = điểm danh ·{" "}
+                  <span className="text-amber-400 font-bold">CK</span> = đã chuyển khoản (bấm để bật/tắt)
+                </p>
                 <button 
                   onClick={handleReset}
-                  className="text-red-400 hover:text-red-300 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto"
+                  className="text-red-400 hover:text-red-300 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto w-full"
                 >
                   <RotateCcw size={14} />
                   Xóa danh sách
@@ -397,6 +380,28 @@ useEffect(() => {
                   <div className="text-[10px] text-slate-500 uppercase font-bold tracking-tighter">Còn trống</div>
                 </div>
               </div>
+              {isAdmin && players.length > 0 && (
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
+                  <div className="text-center p-3 bg-emerald-50 rounded-lg border border-emerald-100">
+                    <div className="text-2xl font-bold text-emerald-700">
+                      {attendedCount.toString().padStart(2, "0")}
+                      <span className="text-sm text-emerald-500">/{players.length.toString().padStart(2, "0")}</span>
+                    </div>
+                    <div className="text-[10px] text-emerald-600 uppercase font-bold tracking-tighter flex items-center justify-center gap-1">
+                      <UserCheck size={10} /> Điểm danh
+                    </div>
+                  </div>
+                  <div className="text-center p-3 bg-amber-50 rounded-lg border border-amber-100">
+                    <div className="text-2xl font-bold text-amber-700">
+                      {paidCount.toString().padStart(2, "0")}
+                      <span className="text-sm text-amber-500">/{players.length.toString().padStart(2, "0")}</span>
+                    </div>
+                    <div className="text-[10px] text-amber-600 uppercase font-bold tracking-tighter flex items-center justify-center gap-1">
+                      <Banknote size={10} /> Chuyển khoản
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
