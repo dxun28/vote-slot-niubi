@@ -183,6 +183,9 @@ const updateConfig = async (newConfig: AppConfig) => {
     if (error) {
       console.error(error);
       await fetchPlayers();
+      if (field === "paid") {
+        alert("Không lưu được trạng thái chuyển khoản. Kiểm tra cột paid trên Supabase.");
+      }
     }
   };
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2, UserCheck, Banknote, FileSpreadsheet } from "lucide-react";
+import { Users, Trash2, Shield, RotateCcw, Plus, CheckCircle2, UserCheck, Banknote } from "lucide-react";
 import { useBadmintonData } from "./services/badmintonService";
-import { exportPlayersExcel } from "./utils/exportPlayersExcel";
 
 export default function App() {
   const { players, config, loading, addPlayer, removePlayer, resetPlayers, updateConfig, updatePlayerStatus } = useBadmintonData();
@@ -78,11 +77,6 @@ export default function App() {
       type: 'reset',
       message: "Bạn có chắc chắn muốn XÓA TOÀN BỘ danh sách thành viên hiện tại? Hành động này không thể hoàn tác."
     });
-  };
-
-  const handleExportExcel = () => {
-    if (!isAdmin) return;
-    exportPlayersExcel(players, config);
   };
 
  const executeConfirmAction = async () => {
@@ -348,15 +342,6 @@ export default function App() {
                   <span className="text-emerald-400 font-bold">ĐD</span> = điểm danh ·{" "}
                   <span className="text-amber-400 font-bold">CK</span> = đã chuyển khoản (bấm để bật/tắt)
                 </p>
-                <button
-                  type="button"
-                  onClick={handleExportExcel}
-                  disabled={players.length === 0}
-                  className="w-full py-2.5 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:cursor-not-allowed rounded text-xs font-bold transition-colors flex items-center justify-center gap-2"
-                >
-                  <FileSpreadsheet size={14} />
-                  Xuất Excel
-                </button>
                 <button 
                   onClick={handleReset}
                   className="text-red-400 hover:text-red-300 text-xs font-bold uppercase tracking-widest flex items-center justify-center gap-2 mx-auto w-full"
