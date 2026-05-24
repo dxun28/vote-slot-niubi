@@ -38,11 +38,24 @@ export default function App() {
   const [editTime, setEditTime] = useState(config.sessionTime);
   const [editMaxSlots, setEditMaxSlots] = useState(config.maxSlots);
 
+  const lastEditSessionRef = useRef<string | null>(null);
+
+  // Nạp form admin chỉ khi đổi buổi (không reset khi đang gõ / sau realtime)
   useEffect(() => {
-    setEditTitle(config.sessionTitle);
-    setEditTime(config.sessionTime);
-    setEditMaxSlots(config.maxSlots);
-  }, [config]);
+    if (activeSessionId === null) return;
+    const session = sessions.find(
+      (s) => String(s.id) === String(activeSessionId)
+    );
+    if (!session) return;
+
+    const key = String(activeSessionId);
+    if (lastEditSessionRef.current === key) return;
+
+    lastEditSessionRef.current = key;
+    setEditTitle(session.sessionTitle);
+    setEditTime(session.sessionTime);
+    setEditMaxSlots(session.maxSlots);
+  }, [activeSessionId, sessions]);
 
   const handleAdminAuth = (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,12 +78,21 @@ export default function App() {
   };
 
   const handleUpdateConfig = async () => {
+    const slots = Math.min(16, Math.max(8, Number(editMaxSlots) || 12));
     const ok = await updateConfig({
-      sessionTitle: editTitle,
-      sessionTime: editTime,
-      maxSlots: editMaxSlots,
+      sessionTitle: editTitle.trim(),
+      sessionTime: editTime.trim(),
+      maxSlots: slots,
     });
-    if (ok) alert("Cập nhật thành công!");
+    if (ok) {
+      setEditMaxSlots(slots);
+      alert("Cập nhật thành công!");
+    }
+  };
+
+  const handleSelectSession = (sessionId: number | string) => {
+    lastEditSessionRef.current = null;
+    selectSession(sessionId);
   };
 
   const handleJoin = (e: React.FormEvent) => {
@@ -226,7 +248,7 @@ export default function App() {
                   <button
                     key={session.id}
                     type="button"
-                    onClick={() => selectSession(session.id)}
+                    onClick={() => handleSelectSession(session.id)}
                     className={`shrink-0 min-w-[140px] max-w-[220px] text-left px-3 py-2.5 rounded-xl border transition-all ${
                       isActive
                         ? "bg-emerald-600 border-emerald-600 text-white shadow-md"
@@ -428,7 +450,10 @@ export default function App() {
                     max="16"
                     className="w-full bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm focus:border-amber-400 outline-none"
                     value={editMaxSlots}
-                    onChange={(e) => setEditMaxSlots(parseInt(e.target.value))}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      setEditMaxSlots(Number.isFinite(n) ? n : 12);
+                    }}
                   />
                   <p className="text-[9px] text-slate-500 mt-1 italic">Tối thiểu 8, tối đa 16 người</p>
                 </div>
@@ -442,7 +467,11 @@ export default function App() {
                   <button
                     type="button"
                     onClick={() => {
-                      const s = sessions.find((x) => x.id === activeSessionId);
+                      const s = sessions.find(
+                        (x) =>
+                          activeSessionId !== null &&
+                          String(x.id) === String(activeSessionId)
+                      );
                       if (s) handleDeleteSession(s.id, s.sessionTitle);
                     }}
                     className="w-full py-2 border border-red-500/50 text-red-400 hover:bg-red-500/10 rounded text-xs font-bold transition-colors flex items-center justify-center gap-1"

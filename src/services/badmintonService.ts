@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { supabase } from "../supabase";
 
 export type SessionId = number | string;
@@ -106,17 +106,21 @@ export function useBadmintonData() {
     sessions[0] ??
     null;
 
-  const config = activeSession
-    ? {
-        sessionTitle: activeSession.sessionTitle,
-        sessionTime: activeSession.sessionTime,
-        maxSlots: activeSession.maxSlots,
-      }
-    : {
-        sessionTitle: "Buổi tập cầu lông",
-        sessionTime: "08:00 - 10:00",
-        maxSlots: 12,
-      };
+  const config = useMemo(
+    () =>
+      activeSession
+        ? {
+            sessionTitle: activeSession.sessionTitle,
+            sessionTime: activeSession.sessionTime,
+            maxSlots: activeSession.maxSlots,
+          }
+        : {
+            sessionTitle: "Buổi tập cầu lông",
+            sessionTime: "08:00 - 10:00",
+            maxSlots: 12,
+          },
+    [activeSession]
+  );
 
   const fetchSessions = useCallback(async (): Promise<Session[]> => {
     let { data, error } = await supabase
@@ -205,9 +209,7 @@ export function useBadmintonData() {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "config" },
-        () => {
-          fetchSessions();
-        }
+        fetchSessions
       )
       .subscribe();
 
