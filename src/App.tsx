@@ -309,13 +309,28 @@ export default function App() {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className={`p-3 bg-slate-50 rounded-lg border flex items-center gap-2 group transition-colors shadow-sm ${
-                      isAdmin ? "border-slate-200 hover:border-emerald-300" : "border-slate-200 hover:border-emerald-300 justify-between"
-                    } ${player.attended && player.paid ? "ring-1 ring-emerald-200" : ""}`}
+                    className={`p-3 rounded-lg border flex items-center gap-2 group transition-colors shadow-sm ${
+                      isAdmin ? "hover:border-emerald-300" : "justify-between"
+                    } ${
+                      player.attended
+                        ? "bg-blue-50 border-blue-300 ring-1 ring-blue-200"
+                        : player.paid
+                          ? "bg-amber-50/40 border-amber-200"
+                          : "bg-slate-50 border-slate-200 hover:border-emerald-300"
+                    }`}
                   >
                     <div className="flex items-center space-x-3 min-w-0 flex-1">
-                      <span className="text-xs font-bold text-slate-400 w-6 shrink-0">{(index + 1).toString().padStart(2, '0')}</span>
-                      <span className="font-semibold text-slate-700 truncate">{player.name}</span>
+                      <span className={`text-xs font-bold w-6 shrink-0 ${player.attended ? "text-blue-500" : "text-slate-400"}`}>
+                        {(index + 1).toString().padStart(2, "0")}
+                      </span>
+                      <span className={`font-semibold truncate ${player.attended ? "text-blue-900" : "text-slate-700"}`}>
+                        {player.name}
+                      </span>
+                      {player.attended && (
+                        <span className="text-[9px] font-bold uppercase text-blue-700 bg-blue-100 border border-blue-200 px-1.5 py-0.5 rounded shrink-0">
+                          Có mặt
+                        </span>
+                      )}
                       {!isAdmin && player.paid && (
                         <span className="text-[9px] font-bold uppercase text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded shrink-0">Đã CK</span>
                       )}
@@ -328,8 +343,8 @@ export default function App() {
                           title="Điểm danh"
                           className={`w-9 h-9 rounded-lg border flex items-center justify-center transition-all ${
                             player.attended
-                              ? "bg-emerald-600 border-emerald-600 text-white shadow-sm"
-                              : "bg-white border-slate-200 text-slate-400 hover:border-emerald-400 hover:text-emerald-600"
+                              ? "bg-blue-600 border-blue-600 text-white shadow-sm shadow-blue-200"
+                              : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-600"
                           }`}
                         >
                           <UserCheck size={16} />
@@ -355,7 +370,13 @@ export default function App() {
                         </button>
                       </div>
                     ) : (
-                      <CheckCircle2 size={16} className="text-emerald-500 opacity-60 shrink-0" />
+                      <div className="flex items-center gap-1 shrink-0">
+                        {player.attended ? (
+                          <UserCheck size={18} className="text-blue-600" aria-label="Đã điểm danh" />
+                        ) : (
+                          <CheckCircle2 size={16} className="text-emerald-500 opacity-60" />
+                        )}
+                      </div>
                     )}
                   </motion.div>
                 ))}
@@ -484,7 +505,7 @@ export default function App() {
               
               <div className="border-t border-slate-700 pt-4 space-y-3">
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  <span className="text-emerald-400 font-bold">ĐD</span> = điểm danh ·{" "}
+                  <span className="text-blue-400 font-bold">ĐD</span> = điểm danh (xanh dương) ·{" "}
                   <span className="text-amber-400 font-bold">CK</span> = đã chuyển khoản (bấm để bật/tắt)
                 </p>
                 <button 
@@ -527,12 +548,12 @@ export default function App() {
               </div>
               {isAdmin && players.length > 0 && (
                 <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100">
-                  <div className="text-center p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-                    <div className="text-2xl font-bold text-emerald-700">
+                  <div className="text-center p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <div className="text-2xl font-bold text-blue-700">
                       {attendedCount.toString().padStart(2, "0")}
-                      <span className="text-sm text-emerald-500">/{players.length.toString().padStart(2, "0")}</span>
+                      <span className="text-sm text-blue-500">/{players.length.toString().padStart(2, "0")}</span>
                     </div>
-                    <div className="text-[10px] text-emerald-600 uppercase font-bold tracking-tighter flex items-center justify-center gap-1">
+                    <div className="text-[10px] text-blue-600 uppercase font-bold tracking-tighter flex items-center justify-center gap-1">
                       <UserCheck size={10} /> Điểm danh
                     </div>
                   </div>
